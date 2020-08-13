@@ -37,6 +37,7 @@
 
 @property IBOutlet NSWindow *window;
 @property (nonatomic) IBOutlet NSPanel *deploymentHelpPanel;
+@property (nonatomic) IBOutlet NSPanel *templateHelpPanel;
 @property (nonatomic) IBOutlet NSPanel *archiveIPAHelpPanel;
 @property (nonatomic) IBOutlet NSPanel *preferencesPanel;
 @property (nonatomic) IBOutlet BuilderController *builderController;
@@ -46,6 +47,8 @@
 - (void)alertDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo;
 
 - (IBAction)showDeploymentHelpPanel:(id)sender;
+
+- (IBAction)showTemplateHelpPanel:(id)sender;
 
 - (IBAction)showArchiveHelpPanel:(id)sender;
 

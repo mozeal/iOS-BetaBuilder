@@ -36,6 +36,31 @@
 
 @implementation BuilderController
 
+- (IBAction)chooseTemplateFile:(id)sender {
+    NSArray *allowedFileTypes = [NSArray arrayWithObjects:@"html", @"HTML", @"htm", @"HTM", nil]; //only allow IPAs
+    
+    NSOpenPanel *openDlg = [NSOpenPanel openPanel];
+    [openDlg setCanChooseFiles:YES];
+    [openDlg setCanChooseDirectories:NO];
+    [openDlg setAllowsMultipleSelection:NO];
+    [openDlg setAllowedFileTypes:allowedFileTypes];
+    
+    if ([openDlg runModal] == NSOKButton) {
+        NSArray *files = [openDlg URLs];
+        
+        for (int i = 0; i < [files count]; i++ ) {
+            NSURL *fileURL = [files objectAtIndex:i];
+            _templateFile = [fileURL path];
+            _templateFilenameField.stringValue = _templateFile;
+        }
+    }
+}
+
+- (IBAction)useDefaultTemplateFile:(id)sender {
+    _templateFile = nil;
+    _templateFilenameField.stringValue = @"";
+}
+
 - (IBAction)specifyIPAFile:(id)sender {
     NSArray *allowedFileTypes = [NSArray arrayWithObjects:@"ipa", @"IPA", nil]; //only allow IPAs
     
@@ -116,16 +141,6 @@
                 
                 [self.webserverDirectoryField setStringValue:@""];
                 [self populateFieldsFromHistoryForBundleID:[bundlePlistFile valueForKey:@"CFBundleIdentifier"]];
-
-                if ([bundlePlistFile valueForKey:@"MinimumOSVersion"]) {
-                    CGFloat minimumOSVerson = [[bundlePlistFile valueForKey:@"MinimumOSVersion"] floatValue];
-
-                    if (minimumOSVerson < 4.0) {
-                        [self.includeZipFileButton setState:NSOnState];
-                    } else {
-                        [self.includeZipFileButton setState:NSOffState];
-                    }
-                }
 			}
 			
 			//set mobile provision file
@@ -174,6 +189,22 @@
         } else {
             NSLog(@"No Output Path History Item Found for Bundle ID: %@", bundleID);
         }
+        
+        NSDictionary *templatePathItem = [historyDictionary valueForKey:[NSString stringWithFormat:@"%@-template", bundleID]];
+        if (templatePathItem) {
+            NSString *templatePath = [templatePathItem valueForKey:@"templatePath"];
+            if (templatePath && ![templatePath isEqualToString:@""] && ([[NSFileManager defaultManager] fileExistsAtPath:templatePath])) {
+                self.templateFile = templatePath;
+                self.templateFilenameField.stringValue = templatePath;
+            }
+            else {
+                self.templateFile = nil;
+                self.templateFilenameField.stringValue = @"";
+                NSLog(@"No Template Path History Item Found for Bundle ID: %@", bundleID);
+            }
+        } else {
+            NSLog(@"No Template Path History Item Found for Bundle ID: %@", bundleID);
+        }
     }
 }
 
@@ -182,7 +213,8 @@
     NSString *historyPath = [applicationSupportPath stringByAppendingPathComponent:@"history.plist"];
     NSString *trimmedURLString = [[self.webserverDirectoryField stringValue] stringByReplacingOccurrencesOfString:@" " withString:@""];
     NSString *outputDirectoryPath = [self.destinationPath path];
-    
+    NSString *templatePath = _templateFile ? _templateFile : @"";
+
     NSMutableDictionary *historyDictionary = [NSMutableDictionary dictionaryWithContentsOfFile:historyPath];
     if (!historyDictionary) {
         historyDictionary = [NSMutableDictionary dictionary];
@@ -193,6 +225,9 @@
     
     NSDictionary *outputDirectoryDictionary = [NSDictionary dictionaryWithObjectsAndKeys:outputDirectoryPath, @"outputDirectory", nil];
     [historyDictionary setValue:outputDirectoryDictionary forKey:[NSString stringWithFormat:@"%@-output", bundleID]];
+    
+    NSDictionary *templateDirectoryDictionary = [NSDictionary dictionaryWithObjectsAndKeys:templatePath, @"templatePath", nil];
+    [historyDictionary setValue:templateDirectoryDictionary forKey:[NSString stringWithFormat:@"%@-template", bundleID]];
     
     [historyDictionary writeToFile:historyPath atomically:YES];
 }
@@ -269,11 +304,7 @@
             exit(1);
         }
     } else  {
-        if ([self.includeZipFileButton state] == NSOnState) {
-            templatePath = [applicationSupportPath stringByAppendingPathComponent:@"index_template.html"];
-        } else {
-            templatePath = [applicationSupportPath stringByAppendingPathComponent:@"index_template_no_tether.html"];
-        }
+        templatePath = [applicationSupportPath stringByAppendingPathComponent:@"index_template.html"];
     }
 
 	NSString *htmlTemplateString = [NSString stringWithContentsOfFile:templatePath encoding:NSUTF8StringEncoding error:nil];
@@ -360,15 +391,6 @@
         return NO;
     }
     
-    //Copy README
-    if ([self.includeZipFileButton state] == NSOnState) {
-        if ([self.overwriteFilesButton state] == NSOnState)
-            [fileManager removeItemAtURL:[saveDirectoryURL URLByAppendingPathComponent:@"README.txt"] error:nil];
-
-        NSString *readmeContents = [[NSBundle mainBundle] pathForResource:@"README" ofType:@""];
-        [readmeContents writeToURL:[saveDirectoryURL URLByAppendingPathComponent:@"README.txt"] atomically:YES encoding:NSASCIIStringEncoding error:nil];
-    }
-    
     //If iTunesArtwork file exists, use it
     BOOL doesArtworkExist = [fileManager fileExistsAtPath:self.appIconFilePath];
     if (doesArtworkExist) {
@@ -408,19 +430,6 @@
         savedSuccessfully = YES;
     }
 
-    //Create Archived Version for 3.0 Apps
-    if ([self.includeZipFileButton state] == NSOnState) {
-        ZipArchive *zip = [[ZipArchive alloc] init];
-        
-        [zip CreateZipFile2:[[saveDirectoryURL path] stringByAppendingPathComponent:@"beta_archive.zip"]];
-        [zip addFileToZip:[self.archiveIPAFilenameField stringValue] newname:@"application.ipa"];
-        [zip addFileToZip:self.mobileProvisionFilePath newname:@"beta_provision.mobileprovision"];
-
-        if (![zip CloseZipFile2]) {
-            NSLog(@"Error Creating 3.x Zip File");
-        }
-    }
-
     [self.progressIndicator stopAnimation:nil];
     
     return savedSuccessfully;
@@ -450,6 +459,14 @@
 
 - (IBAction)openInFinder:(id)sender {
     [[NSWorkspace sharedWorkspace] openURL:self.destinationPath];
+}
+
+- (IBAction)openDefaultTemplateInFinder:(id)sender {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSString *applicationSupportPath = [fileManager applicationSupportDirectory];
+    NSURL *url = [NSURL fileURLWithPath:applicationSupportPath];
+    if (url)
+        [[NSWorkspace sharedWorkspace] openURL:url];
 }
 
 @end

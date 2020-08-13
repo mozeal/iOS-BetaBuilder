@@ -45,6 +45,7 @@
 
 @synthesize window = _window;
 @synthesize deploymentHelpPanel = _deploymentHelpPanel;
+@synthesize templateHelpPanel = _templateHelpPanel;
 @synthesize archiveIPAHelpPanel = _archiveIPAHelpPanel;
 @synthesize builderController = _builderController;
 @synthesize preferencesPanel = _preferencesPanel;
@@ -110,7 +111,7 @@
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSString *applicationSupportPath = [fileManager applicationSupportDirectory];
 
-    NSArray *templateNames = @[@"index_template.html", @"index_template_no_tether.html"];
+    NSArray *templateNames = @[@"index_template.html"];
     
     for (NSString *templateName in templateNames) {
         NSString *templatePath = [applicationSupportPath stringByAppendingPathComponent:templateName];
@@ -189,7 +190,11 @@
 }
 
 - (IBAction)showDeploymentHelpPanel:(id)sender {
-	[self.deploymentHelpPanel setIsVisible:YES];
+    [self.deploymentHelpPanel setIsVisible:YES];
+}
+
+- (IBAction)showTemplateHelpPanel:(id)sender {
+    [self.templateHelpPanel setIsVisible:YES];
 }
 
 - (IBAction)showArchiveHelpPanel:(id)sender {
